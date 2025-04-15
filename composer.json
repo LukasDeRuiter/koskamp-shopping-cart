@@ -1,0 +1,15 @@
+{
+    "name": "lukas/koskamp-shopping-cart",
+    "description": "Shopping cart made by me, Lukas de Ruiter, for the Koskamp assesment",
+    "type": "project",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Lukas\\KoskampShoppingCart\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "require-dev": {
+        "phpunit/phpunit": "^9"
+    }
+}
