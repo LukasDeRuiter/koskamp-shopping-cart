@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Winkelwagen</title>
+</head>
+<body>
+<h2>Producten</h2>
+<div>
+    <button data-object-number="test-product-1" class="add-btn">Voeg Product 1 toe (€15,99)</button>
+    <button data-object-number="test-product-2" class="add-btn">Voeg Product 2 toe (€10,-)</button>
+    <button data-object-number="test-product-3" class="add-btn">Voeg Product 3 toe (€29,99)</button>
+</div>
+<h3>Korting toevoegen</h3>
+<input type="number" id="discount-input" placeholder="Korting toevoegen" min="0" max="100">
+<button id="apply-discount">Toepassen</button>
+
+<h1>Uw winkelwagen</h1>
+<button id="clear-cart">Winkelwagen legen</button>
+<ul id="cart-summary">
+    <?php foreach ($cart->getCartItems() as $cartItem): ?>
+        <li id="<?=$cartItem->getProduct()->getProductNumber()?>">
+            Product: <?= $cartItem->getProduct()->getProductNumber() ?>
+            , Aantal: <input
+                    id="input-<?=$cartItem->getProduct()->getProductNumber()?>"
+                    data-object-number="<?= $cartItem->getProduct()->getProductNumber() ?>"
+                    type="number"
+                    placeholder="Aantal"
+                    min="1"
+                    value="<?= $cartItem->getAmount() ?>">
+            , Totale prijs: €<?= number_format($cartItem->calculateTotalPrice(), 2) ?>
+            <button class="update-btn" data-object-number="<?= $cartItem->getProduct()->getProductNumber() ?>">Update dit product</button>
+            <button class="remove-btn" data-object-number="<?= $cartItem->getProduct()->getProductNumber() ?>">Verwijder dit product</button>
+        </li>
+    <?php endforeach; ?>
+</ul>
+<p id="cart-total">
+    <?php if (!empty($cart->getCartItems())): ?>
+        <strong>Totaal zonder korting:</strong> €<?= number_format($cart->calculateTotalCost(true), 2)?><br>
+        <strong>Korting:</strong> <?= $cart->getDiscount()->getPercentage()?>%<br>
+        <strong>Totaal met korting:</strong> €<?= number_format($cart->calculateTotalCost(), 2)?>
+    <?php endif; ?>
+</p>
+</body>
+</html>
+
+<script>
+    document.querySelectorAll('button[data-object-number]').forEach(button => {
+        button.addEventListener('click', async (e) => {
+            const objectNumber = button.getAttribute('data-object-number');
+            const discountValue = parseFloat(document.getElementById('discount-input').value) || 0;
+            const amountInput = document.getElementById(`input-${objectNumber}`);
+            let amount;
+
+            if (amountInput) {
+                amount = amountInput.value;
+            }
+
+            const isAdd = button.classList.contains('add-btn');
+            const isUpdate = button.classList.contains('update-btn');
+            const isRemove = button.classList.contains('remove-btn');
+
+            let response;
+
+            if (isAdd) {
+                response = await fetch(`?action=add&objectNumber=${objectNumber}&discount=${discountValue}`);
+            } else if (isRemove) {
+                response = await fetch(`?action=remove&objectNumber=${objectNumber}&discount=${discountValue}`);
+            } else if (isUpdate) {
+                response = await fetch(`?action=update&objectNumber=${objectNumber}&discount=${discountValue}&amount=${amount}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+
+                const summaryContainer = document.getElementById('cart-summary');
+                summaryContainer.innerHTML = '';
+
+                data.cartItems.forEach(cartItem => {
+                    let cartItemElement = document.getElementById(cartItem.productNumber);
+                    let newElement = false;
+
+                    if (!cartItemElement) {
+                        cartItemElement = document.createElement('li');
+                        newElement = true;
+                    }
+
+                    cartItemElement = formatCartItemEntry(cartItem);
+
+
+                    summaryContainer.append(cartItemElement)
+
+                })
+
+                formatTotal(data);
+
+                bindActionButtons();
+
+            } else {
+                alert('Failed to add product: ' + data.error);
+            }
+        });
+    });
+
+    document.getElementById('clear-cart').addEventListener('click', async () => {
+        const response = await fetch('?action=clear', {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('cart-summary').innerHTML = '';
+            document.getElementById('cart-total').innerHTML = 'Winkelwagen is schoongemaakt.';
+        } else {
+            alert('Failed to clear cart: ' + data.error);
+        }
+    })
+
+    function bindActionButtons() {
+        document.querySelectorAll('.remove-btn').forEach(button => {
+            button.removeEventListener('click', handleRemove);
+            button.addEventListener('click', handleRemove);
+        });
+        document.querySelectorAll('.update-btn').forEach(button => {
+            button.removeEventListener('click', handleUpdate);
+            button.addEventListener('click', handleUpdate);
+        });
+    }
+
+    async function handleRemove(e) {
+        const objectNumber = e.target.getAttribute('data-object-number');
+        const discountValue = parseFloat(document.getElementById('discount-input').value) || 0;
+        const response = await fetch(`?action=remove&objectNumber=${objectNumber}&discount=${discountValue}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const summaryContainer = document.getElementById('cart-summary');
+            summaryContainer.innerHTML = '';
+
+            data.cartItems.forEach(cartItem => {
+                const li = formatCartItemEntry(cartItem);
+                summaryContainer.appendChild(li);
+            });
+
+            formatTotal(data);
+
+            bindActionButtons();
+        } else {
+            alert('Failed to remove product: ' + data.error);
+        }
+    }
+
+    async function handleUpdate(e) {
+        const objectNumber = e.target.getAttribute('data-object-number');
+        const discountValue = parseFloat(document.getElementById('discount-input').value) || 0;
+        const amount = document.getElementById(`input-${objectNumber}`).value;
+        const response = await fetch(`?action=update&objectNumber=${objectNumber}&discount=${discountValue}&amount=${amount}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const summaryContainer = document.getElementById('cart-summary');
+            summaryContainer.innerHTML = '';
+
+            data.cartItems.forEach(cartItem => {
+                const li = formatCartItemEntry(cartItem);
+                summaryContainer.appendChild(li);
+            });
+
+            formatTotal(data);
+
+            bindActionButtons();
+        } else {
+            alert('Failed to remove product: ' + data.error);
+        }
+    }
+
+    function formatCartItemEntry(cartItem) {
+        const li = document.createElement('li');
+        li.id = cartItem.productNumber;
+        li.innerHTML = `
+                Product: ${cartItem.productNumber}
+                , Aantal: <input
+                    id="input-${cartItem.productNumber}"
+                    data-object-number="${cartItem.productNumber} ?>"
+                    type="number"
+                    placeholder="Aantal"
+                    min="1"
+                    value="${cartItem.amount}">
+                , Totale prijs: €${cartItem.total.toFixed(2)}
+                <button class="update-btn" data-object-number="${cartItem.productNumber}">Update dit product</button>
+                <button class="remove-btn" data-object-number="${cartItem.productNumber}">Verwijder dit product</button>
+            `;
+
+        return li;
+    }
+
+    function formatTotal(data) {
+        const totalElement = document.getElementById('cart-total');
+        totalElement.innerHTML = '';
+
+        totalElement.innerHTML = `
+            <strong>Totaal zonder korting:</strong> €${data.totalCostWithoutDiscount.toFixed(2)} <br>
+            <strong>Korting:</strong> ${Math.round(data.discount)}%<br>
+            <strong>Totaal met korting:</strong> €${data.totalCost.toFixed(2)}
+        `;
+    }
+</script>
